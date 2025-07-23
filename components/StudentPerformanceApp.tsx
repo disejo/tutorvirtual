@@ -1,43 +1,112 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'; // Añadido PieChart, Pie, Cell
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+
+// Declaración global para window.XLSX
+// Esto es necesario porque la librería XLSX se carga dinámicamente en el navegador.
+// En un proyecto Next.js real, podrías considerar instalar @types/xlsx para tipos más específicos,
+// pero para una carga dinámica simple, 'any' es un punto de partida funcional.
+declare global {
+  interface Window {
+    XLSX: any;
+  }
+}
+
+// --- Interfaces para las estructuras de datos ---
+
+interface StudentGradeEntry {
+  topic: string;
+  grade: string;
+}
+
+interface StudentSheetData {
+  studentName: string;
+  grades: { [date: string]: StudentGradeEntry };
+}
+
+interface StudentAverageDetail {
+  currentAverage: string;
+  missingActivities: number;
+  lowGradeTopics: string[];
+}
+
+interface ActivityDetail {
+  topic: string;
+  average: string;
+  students: StudentGradeDetail[];
+}
+
+interface StudentGradeDetail {
+  studentName: string;
+  grade: string;
+}
+
+interface StudentAtRisk {
+  name: string;
+  projectedAverage: string;
+  missing: number;
+  details: string[];
+}
+
+interface GradeCategoryCount {
+  name: string;
+  value: number;
+}
+
+interface ChartDataPoint {
+  date: string;
+  grade: number | null;
+  averageGrade?: number | null; // Opcional para el gráfico de grupo
+}
+
+interface AnalysisResults {
+  studentAverages: { [studentName: string]: StudentAverageDetail };
+  activitiesWithLowerGrades: ActivityDetail[];
+  activitiesWithHigherGrades: ActivityDetail[];
+  studentsAtRisk: StudentAtRisk[];
+  gradeCategoryCounts: GradeCategoryCount[];
+  bestStudentPerformanceData: ChartDataPoint[];
+  bestStudentName: string;
+  groupPerformanceData: ChartDataPoint[];
+}
 
 // Componente principal de la aplicación
 const StudentPerformanceApp = () => {
     // Estado para almacenar los archivos XLSX cargados (workbook objects)
-    const [uploadedWorkbooks, setUploadedWorkbooks] = useState({});
+    // El tipo 'any' se usa aquí porque el objeto WorkBook de XLSX es complejo
+    // y su tipo exacto dependería de la instalación de @types/xlsx.
+    const [uploadedWorkbooks, setUploadedWorkbooks] = useState<{[fileName: string]: any}>({});
     // Estado para el nombre del archivo XLSX actualmente seleccionado
-    const [selectedFileName, setSelectedFileName] = useState('');
+    const [selectedFileName, setSelectedFileName] = useState<string>('');
     // Estado para el nombre de la hoja seleccionada dentro del XLSX
-    const [selectedSheetName, setSelectedSheetName] = useState('');
+    const [selectedSheetName, setSelectedSheetName] = useState<string>('');
     // Estado para los datos parseados de la hoja seleccionada
-    const [sheetData, setSheetData] = useState([]);
+    const [sheetData, setSheetData] = useState<StudentSheetData[]>([]);
     // Estado para todas las fechas disponibles en la hoja
-    const [allDates, setAllDates] = useState([]);
+    const [allDates, setAllDates] = useState<string[]>([]);
     // Estado para la fecha de inicio del rango de análisis
-    const [startDate, setStartDate] = useState('');
+    const [startDate, setStartDate] = useState<string>('');
     // Estado para la fecha de fin del rango de análisis
-    const [endDate, setEndDate] = useState('');
+    const [endDate, setEndDate] = useState<string>('');
     // Estado para los resultados del análisis
-    const [analysisResults, setAnalysisResults] = useState(null);
+    const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
     // Estado para el mensaje de error
-    const [error, setError] = useState('');
+    const [error, setError] = useState<string>('');
     // Estado para indicar si la librería XLSX está cargada
-    const [xlsxLoaded, setXlsxLoaded] = useState(false);
+    const [xlsxLoaded, setXlsxLoaded] = useState<boolean>(false);
     // Estado para indicar si la librería Recharts está cargada (asumimos que sí en este entorno)
-    // FIX: Corregido la inicialización del estado de Recharts
-    const [rechartsLoaded, setRechartsLoaded] = useState(true); // Se asume que Recharts está disponible
+    const [rechartsLoaded, setRechartsLoaded] = useState<boolean>(true); // Se asume que Recharts está disponible
 
     // Estados para el feedback del LLM
-    const [llmFeedback, setLlmFeedback] = useState('');
-    const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
-    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-    const [feedbackStudentName, setFeedbackStudentName] = useState('');
+    const [llmFeedback, setLlmFeedback] = useState<string>('');
+    const [isGeneratingFeedback, setIsGeneratingFeedback] = useState<boolean>(false);
+    const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
+    const [feedbackStudentName, setFeedbackStudentName] = useState<string>('');
 
     // Nuevo estado para controlar la visibilidad de las listas de estudiantes en actividades
-    const [expandedActivities, setExpandedActivities] = useState({});
+    const [expandedActivities, setExpandedActivities] = useState<{[key: string]: boolean}>({});
 
     // Colores para el gráfico de pastel de calificaciones (colores más claros)
-    const PIE_COLORS = {
+    const PIE_COLORS: {[key: string]: string} = {
         'Logrado (L)': '#81C784',    // Light Green
         'Medianamente Logrado (ML)': '#FFD54F', // Light Amber
         'No Logrado (NL)': '#EF9A9A'   // Light Red
@@ -67,10 +136,12 @@ const StudentPerformanceApp = () => {
     }, []);
 
     // Función para manejar la carga de archivos XLSX
-    const handleFileUpload = (event) => {
+    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
         setError('');
         const files = event.target.files;
         const newUploadedWorkbooks = { ...uploadedWorkbooks };
+
+        if (!files) return;
 
         Array.from(files).forEach(file => {
             console.log(`DEBUG: Processing file: ${file.name}`);
@@ -78,7 +149,7 @@ const StudentPerformanceApp = () => {
             reader.onload = (e) => {
                 try {
                     if (typeof window !== 'undefined' && window.XLSX) {
-                        const data = new Uint8Array(e.target.result);
+                        const data = new Uint8Array(e.target?.result as ArrayBuffer);
                         const workbook = window.XLSX.read(data, { type: 'array' });
                         newUploadedWorkbooks[file.name] = workbook;
                         setUploadedWorkbooks({ ...newUploadedWorkbooks });
@@ -131,7 +202,7 @@ const StudentPerformanceApp = () => {
                 } else {
                     setError("La librería XLSX no está cargada. Por favor, espera o recarga la página.");
                 }
-            } catch (e) {
+            } catch (e: any) { // Usar 'any' para el error si no se conoce el tipo exacto
                 console.error("DEBUG: Error processing sheet data:", e);
                 setError("Error al procesar los datos de la hoja. Asegúrate de que el formato sea correcto y tenga al menos 3 filas (encabezados, temas, y datos de estudiante).");
                 setSheetData([]);
@@ -148,13 +219,14 @@ const StudentPerformanceApp = () => {
     }, [selectedFileName, selectedSheetName, uploadedWorkbooks, xlsxLoaded]);
 
     // Función para procesar los datos de una hoja XLSX específica
-    const processXLSXSheetData = (workbook, sheetName) => {
+    const processXLSXSheetData = (workbook: any, sheetName: string): { data: StudentSheetData[]; dates: string[] } => {
         if (typeof window === 'undefined' || !window.XLSX) {
             throw new Error("XLSX library not available for processing.");
         }
 
         const worksheet = workbook.Sheets[sheetName];
-        const jsonSheet = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+        // sheet_to_json con header: 1 devuelve un array de arrays
+        const jsonSheet: string[][] = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
         console.log("DEBUG: Raw JSON sheet data:", jsonSheet);
 
@@ -162,23 +234,24 @@ const StudentPerformanceApp = () => {
             throw new Error("La hoja no tiene suficientes filas para el formato esperado.");
         }
 
-        const headers = jsonSheet[0];
-        const topics = jsonSheet[1];
+        const headers = jsonSheet[0]; // Primera fila para encabezados (fechas)
+        const topics = jsonSheet[1];   // Segunda fila para temas
 
         console.log("DEBUG: Headers (Dates row):", headers);
         console.log("DEBUG: Topics (Activities row):", topics);
 
-        const dates = headers.slice(1).map(dateStr => String(dateStr || '').trim());
+        const dates: string[] = headers.slice(1).map((dateStr: any) => String(dateStr || '').trim());
         console.log("DEBUG: Extracted dates:", dates);
 
-        const data = [];
+        const data: StudentSheetData[] = [];
         for (let i = 2; i < jsonSheet.length; i++) {
             const row = jsonSheet[i];
+            // Asegurarse de que el nombre del estudiante no esté vacío
             if (row[0] && String(row[0]).trim() !== '') {
                 const studentName = String(row[0]).trim();
-                const studentGrades = {};
+                const studentGrades: { [date: string]: StudentGradeEntry } = {};
 
-                const ignoredTopicKeywords = [
+                const ignoredTopicKeywords: string[] = [
                     'etapa diagnostico', 'diagnostico',
                     'no asisti', 'no hubo actividad', 'no hay clases por alumnos abocados al acto del 25',
                     'receso invernal', 'feriado', 'asueto por clima', 'vacaciones de invierno',
@@ -218,7 +291,7 @@ const StudentPerformanceApp = () => {
     };
 
     // Función para convertir calificaciones cualitativas a numéricas (escala 1-9)
-    const convertGradeToNumeric = (grade) => {
+    const convertGradeToNumeric = (grade: string): number | null => {
         grade = String(grade).toUpperCase();
         switch (grade) {
             case 'L': return 9;
@@ -234,7 +307,7 @@ const StudentPerformanceApp = () => {
     };
 
     // Función principal para realizar el análisis
-    const performAnalysis = () => {
+    const performAnalysis = (): void => {
         setError('');
         if (!sheetData.length || !startDate || !endDate) {
             setError("Por favor, carga un archivo, selecciona una hoja y un rango de fechas.");
@@ -251,33 +324,37 @@ const StudentPerformanceApp = () => {
             return;
         }
 
-        const relevantDatesInSelectedRange = allDates.slice(startIdx, endIdx + 1).filter(date => {
+        const relevantDatesInSelectedRange: string[] = allDates.slice(startIdx, endIdx + 1).filter(date => {
             return sheetData.some(student => student.grades[date]);
         });
         console.log("DEBUG: Relevant dates in selected range (after filtering ignored topics):", relevantDatesInSelectedRange);
 
 
-        const studentAverages = {};
-        const activityGrades = {};
-        const studentsAtRisk = [];
-        const gradeCategoryCounts = { L: 0, ML: 0, NL: 0 };
+        const studentAverages: { [studentName: string]: StudentAverageDetail } = {};
+        const activityGrades: { [topic: string]: { sum: number; count: number } } = {};
+        const studentsAtRisk: StudentAtRisk[] = [];
+        const gradeCategoryCounts: GradeCategoryCount[] = [
+            { name: 'Logrado (L)', value: 0 },
+            { name: 'Medianamente Logrado (ML)', value: 0 },
+            { name: 'No Logrado (NL)', value: 0 }
+        ];
 
-        const bestStudentPerformanceData = [];
-        const groupPerformanceData = [];
-        let bestStudentName = '';
-        let highestAverage = -1;
+        const bestStudentPerformanceData: ChartDataPoint[] = [];
+        const groupPerformanceData: ChartDataPoint[] = [];
+        let bestStudentName: string = '';
+        let highestAverage: number = -1;
 
         // Nuevos objetos para almacenar estudiantes por actividad con bajas/altas calificaciones
-        const lowGradeActivitiesDetails = {};
-        const highGradeActivitiesDetails = {};
+        const lowGradeActivitiesDetails: { [topic: string]: StudentGradeDetail[] } = {};
+        const highGradeActivitiesDetails: { [topic: string]: StudentGradeDetail[] } = {};
 
 
         sheetData.forEach(student => {
-            let totalGradesForProjection = 0;
-            let missingActivitiesCount = 0;
-            let studentActivitiesCount = 0;
+            let totalGradesForProjection: number = 0;
+            let missingActivitiesCount: number = 0;
+            let studentActivitiesCount: number = 0;
 
-            const currentStudentChartData = [];
+            const currentStudentChartData: ChartDataPoint[] = [];
 
             relevantDatesInSelectedRange.forEach(date => {
                 const activity = student.grades[date];
@@ -286,15 +363,19 @@ const StudentPerformanceApp = () => {
                     const numericGrade = convertGradeToNumeric(activity.grade);
 
                     const originalGrade = String(activity.grade).toUpperCase();
-                    if (['L', 'ML', 'NL'].includes(originalGrade)) {
-                        gradeCategoryCounts[originalGrade]++;
+                    if (originalGrade === 'L') {
+                        gradeCategoryCounts[0].value++;
+                    } else if (originalGrade === 'ML') {
+                        gradeCategoryCounts[1].value++;
+                    } else if (originalGrade === 'NL') {
+                        gradeCategoryCounts[2].value++;
                     }
 
                     if (numericGrade !== null) {
                         totalGradesForProjection += numericGrade;
                     } else {
                         missingActivitiesCount++;
-                        totalGradesForProjection += 3;
+                        totalGradesForProjection += 3; // Asumir 'NL' (3 en escala 1-9) para tareas pendientes en la proyección
                     }
 
                     if (!activityGrades[activity.topic]) {
@@ -318,7 +399,7 @@ const StudentPerformanceApp = () => {
                         }
                         lowGradeActivitiesDetails[activity.topic].push({
                             studentName: student.studentName,
-                            grade: activity.grade // Calificación original
+                            grade: activity.grade
                         });
                     }
 
@@ -341,7 +422,7 @@ const StudentPerformanceApp = () => {
                 currentAverage: currentAverageIncludingPending.toFixed(2),
                 missingActivities: missingActivitiesCount,
                 lowGradeTopics: Object.entries(student.grades)
-                                    .filter(([date, activity]) => relevantDatesInSelectedRange.includes(date) && convertGradeToNumeric(activity.grade) !== null && convertGradeToNumeric(activity.grade) < 6)
+                                    .filter(([date, activity]) => relevantDatesInSelectedRange.includes(date) && convertGradeToNumeric(activity.grade) !== null && convertGradeToNumeric(activity.grade)! < 6)
                                     .map(([date, activity]) => activity.topic)
                                     .filter((value, index, self) => self.indexOf(value) === index)
             };
@@ -367,23 +448,23 @@ const StudentPerformanceApp = () => {
 
         const avgActivityGrades = Object.entries(activityGrades).map(([topic, data]) => ({
             topic,
-            average: data.count > 0 ? (data.sum / data.count).toFixed(2) : 0
+            average: data.count > 0 ? (data.sum / data.count).toFixed(2) : '0' // Asegurar que el promedio es string
         }));
 
-        const activitiesWithLowerGrades = [...avgActivityGrades]
+        const activitiesWithLowerGrades: ActivityDetail[] = [...avgActivityGrades]
             .sort((a, b) => parseFloat(a.average) - parseFloat(b.average))
             .slice(0, 5)
             .map(activity => ({
                 ...activity,
-                students: lowGradeActivitiesDetails[activity.topic] || [] // Adjuntar detalles de estudiantes
+                students: lowGradeActivitiesDetails[activity.topic] || []
             }));
 
-        const activitiesWithHigherGrades = [...avgActivityGrades]
+        const activitiesWithHigherGrades: ActivityDetail[] = [...avgActivityGrades]
             .sort((a, b) => parseFloat(b.average) - parseFloat(a.average))
             .slice(0, 5)
             .map(activity => ({
                 ...activity,
-                students: highGradeActivitiesDetails[activity.topic] || [] // Adjuntar detalles de estudiantes
+                students: highGradeActivitiesDetails[activity.topic] || []
             }));
         console.log("DEBUG: Activities with lower grades:", activitiesWithLowerGrades);
         console.log("DEBUG: Activities with higher grades:", activitiesWithHigherGrades);
@@ -404,7 +485,8 @@ const StudentPerformanceApp = () => {
             });
             groupPerformanceData.push({
                 date: date,
-                averageGrade: countStudentsWithGradeForDate > 0 ? parseFloat((sumGradesForDate / countStudentsWithGradeForDate).toFixed(2)) : null
+                averageGrade: countStudentsWithGradeForDate > 0 ? parseFloat((sumGradesForDate / countStudentsWithGradeForDate).toFixed(2)) : null,
+                grade: null // Añadir grade para consistencia con ChartDataPoint
             });
         });
         console.log("DEBUG: Group performance data:", groupPerformanceData);
@@ -415,11 +497,7 @@ const StudentPerformanceApp = () => {
             activitiesWithLowerGrades,
             activitiesWithHigherGrades,
             studentsAtRisk,
-            gradeCategoryCounts: [
-                { name: 'Logrado (L)', value: gradeCategoryCounts.L },
-                { name: 'Medianamente Logrado (ML)', value: gradeCategoryCounts.ML },
-                { name: 'No Logrado (NL)', value: gradeCategoryCounts.NL }
-            ],
+            gradeCategoryCounts,
             bestStudentPerformanceData,
             bestStudentName,
             groupPerformanceData
@@ -428,7 +506,7 @@ const StudentPerformanceApp = () => {
     };
 
     // Función para generar feedback usando la API Route de Next.js
-    const generateFeedback = async (studentName, currentAverage, missingActivities, lowGradeTopics) => {
+    const generateFeedback = async (studentName: string, currentAverage: string, missingActivities: number, lowGradeTopics: string[]): Promise<void> => {
         setIsGeneratingFeedback(true);
         setLlmFeedback('');
         setFeedbackStudentName(studentName);
@@ -442,7 +520,6 @@ const StudentPerformanceApp = () => {
                 lowGradeTopics
             };
 
-            // Llama a tu API Route interna en lugar de directamente a la API de Gemini
             const response = await fetch('/api/generate-feedback', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -451,14 +528,13 @@ const StudentPerformanceApp = () => {
 
             const result = await response.json();
 
-            if (response.ok) { // Verifica si la respuesta de tu API Route fue exitosa (status 200)
+            if (response.ok) {
                 setLlmFeedback(result.feedback);
             } else {
-                // Mensaje de error más descriptivo
                 setLlmFeedback(`No se pudo generar el feedback. Error: ${result.error || 'Error desconocido del servidor.'} Por favor, verifica la consola del servidor de Next.js para más detalles y asegúrate de que tu clave de API de Gemini esté configurada correctamente en .env.local (GEMINI_API_KEY).`);
                 console.error("DEBUG: Error de la API Route:", result.error);
             }
-        } catch (apiError) {
+        } catch (apiError: any) {
             console.error("DEBUG: Error al llamar a la API Route:", apiError);
             setLlmFeedback("Error al conectar con el servidor para generar el feedback. Revisa tu conexión a internet o la consola del navegador.");
         } finally {
@@ -468,13 +544,13 @@ const StudentPerformanceApp = () => {
 
     // Memoizar las opciones de fecha para los selectores
     const dateOptions = useMemo(() => {
-        return allDates.map(date => (
+        return allDates.map((date: string) => (
             <option key={date} value={date}>{date}</option>
         ));
     }, [allDates]);
 
     // Función para alternar la expansión de una actividad
-    const toggleActivityExpansion = (activityTopic) => {
+    const toggleActivityExpansion = (activityTopic: string): void => {
         setExpandedActivities(prev => ({
             ...prev,
             [activityTopic]: !prev[activityTopic]
@@ -482,7 +558,8 @@ const StudentPerformanceApp = () => {
     };
 
     // Función para renderizar las etiquetas del Pie Chart con porcentajes
-    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
+    // Las props de Recharts son complejas, se tipan como 'any' para simplificar.
+    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any): React.ReactElement => {
         // Calculate position for the label slightly outside the slice
         const radius = outerRadius * 1.2; // Place label 20% further out than the outer radius
         const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
@@ -548,7 +625,7 @@ const StudentPerformanceApp = () => {
                             <select
                                 id="file-select"
                                 value={selectedFileName}
-                                onChange={(e) => {
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                                     setSelectedFileName(e.target.value);
                                     const workbook = uploadedWorkbooks[e.target.value];
                                     if (workbook && workbook.SheetNames.length > 0) {
@@ -561,7 +638,7 @@ const StudentPerformanceApp = () => {
                                 disabled={Object.keys(uploadedWorkbooks).length === 0}
                             >
                                 <option value="">-- Selecciona un archivo --</option>
-                                {Object.keys(uploadedWorkbooks).map(fileName => (
+                                {Object.keys(uploadedWorkbooks).map((fileName: string) => (
                                     <option key={fileName} value={fileName}>{fileName}</option>
                                 ))}
                             </select>
@@ -574,12 +651,12 @@ const StudentPerformanceApp = () => {
                             <select
                                 id="sheet-select"
                                 value={selectedSheetName}
-                                onChange={(e) => setSelectedSheetName(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedSheetName(e.target.value)}
                                 className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                 disabled={!selectedFileName || !uploadedWorkbooks[selectedFileName]?.SheetNames.length}
                             >
                                 <option value="">-- Selecciona una hoja --</option>
-                                {selectedFileName && uploadedWorkbooks[selectedFileName]?.SheetNames.map(sheetName => (
+                                {selectedFileName && uploadedWorkbooks[selectedFileName]?.SheetNames.map((sheetName: string) => (
                                     <option key={sheetName} value={sheetName}>{sheetName}</option>
                                 ))}
                             </select>
@@ -593,7 +670,7 @@ const StudentPerformanceApp = () => {
                                 <select
                                     id="start-date"
                                     value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
+                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStartDate(e.target.value)}
                                     className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     disabled={!sheetData.length}
                                 >
@@ -607,7 +684,7 @@ const StudentPerformanceApp = () => {
                                 <select
                                     id="end-date"
                                     value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
+                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setEndDate(e.target.value)}
                                     className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     disabled={!sheetData.length}
                                 >
@@ -650,7 +727,7 @@ const StudentPerformanceApp = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
-                                            {Object.entries(analysisResults.studentAverages).map(([studentName, data]) => (
+                                            {Object.entries(analysisResults.studentAverages).map(([studentName, data]: [string, StudentAverageDetail]) => (
                                                 <tr key={studentName} className="hover:bg-gray-50">
                                                     <td className="py-3 px-4 whitespace-nowrap text-sm font-medium text-gray-900">{studentName}</td>
                                                     <td className="py-3 px-4 whitespace-nowrap text-sm text-gray-700">{data.currentAverage}</td>
@@ -702,7 +779,7 @@ const StudentPerformanceApp = () => {
                                 <h3 className="text-2xl font-semibold text-gray-800 mb-4">Actividades con Menores Calificaciones</h3>
                                 <ul className="list-none space-y-3 text-gray-700">
                                     {analysisResults.activitiesWithLowerGrades.length > 0 ? (
-                                        analysisResults.activitiesWithLowerGrades.map((item, index) => (
+                                        analysisResults.activitiesWithLowerGrades.map((item: ActivityDetail, index: number) => (
                                             <li key={index} className="bg-red-50 p-3 rounded-md shadow-sm">
                                                 <button
                                                     onClick={() => toggleActivityExpansion(item.topic + '-low')}
@@ -713,7 +790,7 @@ const StudentPerformanceApp = () => {
                                                 </button>
                                                 {expandedActivities[item.topic + '-low'] && item.students.length > 0 && (
                                                     <ul className="mt-2 ml-4 list-none text-sm text-gray-600">
-                                                        {item.students.map((studentDetail, sIdx) => (
+                                                        {item.students.map((studentDetail: StudentGradeDetail, sIdx: number) => (
                                                             <li key={sIdx}>{studentDetail.studentName}: {studentDetail.grade}</li>
                                                         ))}
                                                     </ul>
@@ -734,7 +811,7 @@ const StudentPerformanceApp = () => {
                                 <h3 className="text-2xl font-semibold text-gray-800 mb-4">Actividades con Mejores Calificaciones</h3>
                                 <ul className="list-none space-y-3 text-gray-700">
                                     {analysisResults.activitiesWithHigherGrades.length > 0 ? (
-                                        analysisResults.activitiesWithHigherGrades.map((item, index) => (
+                                        analysisResults.activitiesWithHigherGrades.map((item: ActivityDetail, index: number) => (
                                             <li key={index} className="bg-green-50 p-3 rounded-md shadow-sm">
                                                 <button
                                                     onClick={() => toggleActivityExpansion(item.topic + '-high')}
@@ -745,7 +822,7 @@ const StudentPerformanceApp = () => {
                                                 </button>
                                                 {expandedActivities[item.topic + '-high'] && item.students.length > 0 && (
                                                     <ul className="mt-2 ml-4 list-none text-sm text-gray-600">
-                                                        {item.students.map((studentDetail, sIdx) => (
+                                                        {item.students.map((studentDetail: StudentGradeDetail, sIdx: number) => (
                                                             <li key={sIdx}>{studentDetail.studentName}: {studentDetail.grade}</li>
                                                         ))}
                                                     </ul>
@@ -775,7 +852,7 @@ const StudentPerformanceApp = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
-                                            {Object.values(analysisResults.studentsAtRisk).map((student, index) => (
+                                            {Object.values(analysisResults.studentsAtRisk).map((student: StudentAtRisk, index: number) => (
                                                 <tr key={index} className="hover:bg-red-50">
                                                     <td className="py-3 px-4 whitespace-nowrap text-sm font-medium text-gray-900">{student.name}</td>
                                                     <td className="py-3 px-4 whitespace-nowrap text-sm text-gray-700">{student.projectedAverage}</td>
@@ -783,7 +860,7 @@ const StudentPerformanceApp = () => {
                                                     <td className="py-3 px-4 text-sm text-gray-700">
                                                         {student.details.length > 0 ? (
                                                             <ul className="list-disc list-inside">
-                                                                {student.details.map((detail, idx) => (
+                                                                {student.details.map((detail: string, idx: number) => (
                                                                     <li key={idx}>{detail}</li>
                                                                 ))}
                                                             </ul>
@@ -799,7 +876,7 @@ const StudentPerformanceApp = () => {
                             {/* Gráfico de Distribución Global de Calificaciones (Pie Chart) */}
                             <div className="mb-8">
                                 <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Distribución Global de Calificaciones</h3>
-                                {analysisResults.gradeCategoryCounts.some(cat => cat.value > 0) ? (
+                                {analysisResults.gradeCategoryCounts.some((cat: GradeCategoryCount) => cat.value > 0) ? (
                                     <ResponsiveContainer width="100%" height={300}>
                                         <PieChart>
                                             <Pie
@@ -812,7 +889,7 @@ const StudentPerformanceApp = () => {
                                                 fill="#8884d8"
                                                 dataKey="value"
                                             >
-                                                {analysisResults.gradeCategoryCounts.map((entry, index) => (
+                                                {analysisResults.gradeCategoryCounts.map((entry: GradeCategoryCount, index: number) => (
                                                     <Cell key={`cell-${index}`} fill={PIE_COLORS[entry.name]} />
                                                 ))}
                                             </Pie>
