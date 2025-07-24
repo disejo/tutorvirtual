@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
+import QuantitativeAnalysisSection from './QuantitativeAnalysisSection';
+import StudentProgressChart from './StudentProgressChart'; 
+import StudentPendingActivities from './StudentPendingActivities';
+
 // Declaración global para window.XLSX
 // Esto es necesario porque la librería XLSX se carga dinámicamente en el navegador.
 // En un proyecto Next.js real, podrías considerar instalar @types/xlsx para tipos más específicos,
@@ -58,6 +62,12 @@ interface ChartDataPoint {
   averageGrade?: number | null; // Opcional para el gráfico de grupo
 }
 
+interface QualitativeStudentAverage {
+  studentName: string;
+  average: string; // Promedio numérico de calificaciones cualitativas (escala 1-9)
+  details: { topic: string; grade: string }[]; // Detalles de las calificaciones cualitativas originales
+}
+
 interface AnalysisResults {
   studentAverages: { [studentName: string]: StudentAverageDetail };
   activitiesWithLowerGrades: ActivityDetail[];
@@ -67,6 +77,7 @@ interface AnalysisResults {
   bestStudentPerformanceData: ChartDataPoint[];
   bestStudentName: string;
   groupPerformanceData: ChartDataPoint[];
+  studentQualitativeAverages: QualitativeStudentAverage[];
 }
 
 // Componente principal de la aplicación
@@ -218,7 +229,30 @@ const StudentPerformanceApp = () => {
         }
     }, [selectedFileName, selectedSheetName, uploadedWorkbooks, xlsxLoaded]);
 
+    // Función para convertir calificaciones cualitativas a numéricas (escala 1-9)
+    const convertGradeToNumeric = (grade: string): number | null => {
+        grade = String(grade).toUpperCase();
+        switch (grade) {
+            case 'L': return 9;
+            case 'ML': return 6;
+            case 'NL': return 3;
+            default:
+                const numGrade = parseFloat(grade);
+                if (!isNaN(numGrade)) {
+                    return numGrade > 9 ? (numGrade / 100) * 9 : numGrade;
+                }
+                return null;
+        }
+    };
+
+    // Función para verificar si una calificación es cualitativa (L, ML, NL)
+    const isQualitativeGrade = (grade: string): boolean => {
+        const upperGrade = String(grade).toUpperCase();
+        return ['L', 'ML', 'NL'].includes(upperGrade);
+    };
+
     // Función para procesar los datos de una hoja XLSX específica
+    // Esta función ahora detecta automáticamente las columnas de actividad basándose en la presencia de calificaciones.
     const processXLSXSheetData = (workbook: any, sheetName: string): { data: StudentSheetData[]; dates: string[] } => {
         if (typeof window === 'undefined' || !window.XLSX) {
             throw new Error("XLSX library not available for processing.");
@@ -244,6 +278,26 @@ const StudentPerformanceApp = () => {
         console.log("DEBUG: Extracted dates:", dates);
 
         const data: StudentSheetData[] = [];
+        const validActivityColumns: { [date: string]: boolean } = {}; // Map date to boolean indicating if it's an activity column
+
+        // Primera pasada: Determinar qué columnas son actividades válidas basándose en la presencia de calificaciones
+        for (let j = 1; j < headers.length; j++) {
+            const date = dates[j - 1];
+            let hasValidGrade = false;
+            // Iterar a través de las filas de estudiantes para esta columna
+            for (let i = 2; i < jsonSheet.length; i++) {
+                const row = jsonSheet[i];
+                const grade = row[j] ? String(row[j]).trim() : '';
+                if (convertGradeToNumeric(grade) !== null || isQualitativeGrade(grade)) {
+                    hasValidGrade = true;
+                    break; // Se encontró una calificación válida, esta es una columna de actividad
+                }
+            }
+            validActivityColumns[date] = hasValidGrade;
+        }
+        console.log("DEBUG: Valid activity columns determined by content:", validActivityColumns);
+
+        // Segunda pasada: Construir los datos del estudiante, incluyendo solo las columnas de actividad válidas
         for (let i = 2; i < jsonSheet.length; i++) {
             const row = jsonSheet[i];
             // Asegurarse de que el nombre del estudiante no esté vacío
@@ -251,34 +305,15 @@ const StudentPerformanceApp = () => {
                 const studentName = String(row[0]).trim();
                 const studentGrades: { [date: string]: StudentGradeEntry } = {};
 
-                const ignoredTopicKeywords: string[] = [
-                    'etapa diagnostico', 'diagnostico',
-                    'no asisti', 'no hubo actividad', 'no hay clases por alumnos abocados al acto del 25',
-                    'receso invernal', 'feriado', 'asueto por clima', 'vacaciones de invierno',
-                    'mesas previas',
-                    'sin actividad', 'sin actividad por salida', 'salida medio ambiente', 'sin actividad por salida de campo',
-                    'no se realizo actividad', 'no se realizo la actividad',
-                    'se comenzo con la practica doc. sin computadora ejercicio hasta 4',
-                    'ver classroom',
-                    'actividades',
-                    'estudiantes'
-                ];
-
                 for (let j = 1; j < headers.length; j++) {
                     const date = dates[j - 1];
-                    const topic = topics[j] ? String(topics[j]).trim() : '';
-
-                    const topicLower = topic.toLowerCase();
-                    const isIgnored = topicLower === '' || ignoredTopicKeywords.some(keyword => topicLower.includes(keyword));
-
-                    if (!isIgnored) {
+                    if (validActivityColumns[date]) { // Solo incluye si es una columna de actividad válida
+                        const topic = topics[j] ? String(topics[j]).trim() : '';
                         const grade = row[j] ? String(row[j]).trim() : '';
                         studentGrades[date] = {
                             topic: topic,
                             grade: grade
                         };
-                    } else {
-                        console.log(`DEBUG: Ignoring column for date: ${date}, topic: "${topic}" (Reason: ${topicLower === '' ? 'empty topic (likely combined cell)' : `matched keyword: ${ignoredTopicKeywords.find(k => topicLower.includes(k))}`})`);
                     }
                 }
                 data.push({ studentName, grades: studentGrades });
@@ -286,25 +321,10 @@ const StudentPerformanceApp = () => {
                 console.log(`DEBUG: Skipping row ${i} due to empty student name: "${row[0]}"`);
             }
         }
-        console.log("DEBUG: Processed student data:", data);
+        console.log("DEBUG: Processed student data (filtered activities):", data);
         return { data, dates };
     };
 
-    // Función para convertir calificaciones cualitativas a numéricas (escala 1-9)
-    const convertGradeToNumeric = (grade: string): number | null => {
-        grade = String(grade).toUpperCase();
-        switch (grade) {
-            case 'L': return 9;
-            case 'ML': return 6;
-            case 'NL': return 3;
-            default:
-                const numGrade = parseFloat(grade);
-                if (!isNaN(numGrade)) {
-                    return numGrade > 9 ? (numGrade / 100) * 9 : numGrade;
-                }
-                return null;
-        }
-    };
 
     // Función principal para realizar el análisis
     const performAnalysis = (): void => {
@@ -325,6 +345,8 @@ const StudentPerformanceApp = () => {
         }
 
         const relevantDatesInSelectedRange: string[] = allDates.slice(startIdx, endIdx + 1).filter(date => {
+            // Filtra las fechas para incluir solo aquellas que tienen datos para al menos un estudiante
+            // y que fueron identificadas como columnas de actividad en processXLSXSheetData.
             return sheetData.some(student => student.grades[date]);
         });
         console.log("DEBUG: Relevant dates in selected range (after filtering ignored topics):", relevantDatesInSelectedRange);
@@ -352,32 +374,39 @@ const StudentPerformanceApp = () => {
         sheetData.forEach(student => {
             let totalGradesForProjection: number = 0;
             let missingActivitiesCount: number = 0;
-            let studentActivitiesCount: number = 0;
+            let studentActivitiesCount: number = 0; // Total de actividades relevantes en el rango para este estudiante
 
             const currentStudentChartData: ChartDataPoint[] = [];
 
             relevantDatesInSelectedRange.forEach(date => {
                 const activity = student.grades[date];
                 if (activity) {
-                    studentActivitiesCount++;
+                    // Solo cuenta como actividad relevante si la columna fue identificada como válida
+                    // y el estudiante tiene una entrada para esa fecha.
+                    studentActivitiesCount++; 
                     const numericGrade = convertGradeToNumeric(activity.grade);
-
-                    const originalGrade = String(activity.grade).toUpperCase();
-                    if (originalGrade === 'L') {
-                        gradeCategoryCounts[0].value++;
-                    } else if (originalGrade === 'ML') {
-                        gradeCategoryCounts[1].value++;
-                    } else if (originalGrade === 'NL') {
-                        gradeCategoryCounts[2].value++;
-                    }
+                    const originalGrade = String(activity.grade).trim().toUpperCase();
 
                     if (numericGrade !== null) {
+                        // Si es una calificación válida (numérica o cualitativa convertida)
                         totalGradesForProjection += numericGrade;
+                        if (isQualitativeGrade(originalGrade)) {
+                            if (originalGrade === 'L') {
+                                gradeCategoryCounts[0].value++;
+                            } else if (originalGrade === 'ML') {
+                                gradeCategoryCounts[1].value++;
+                            } else if (originalGrade === 'NL') {
+                                gradeCategoryCounts[2].value++;
+                            }
+                        }
                     } else {
+                        // Si numericGrade es null, significa que la celda estaba vacía O contenía texto no reconocible.
+                        // En ambos casos, se considera una actividad pendiente.
                         missingActivitiesCount++;
                         totalGradesForProjection += 3; // Asumir 'NL' (3 en escala 1-9) para tareas pendientes en la proyección
                     }
 
+                    // Lógica para promedios de actividades (menores/mayores) - considera todas las notas numéricas
                     if (!activityGrades[activity.topic]) {
                         activityGrades[activity.topic] = { sum: 0, count: 0 };
                     }
@@ -500,7 +529,8 @@ const StudentPerformanceApp = () => {
             gradeCategoryCounts,
             bestStudentPerformanceData,
             bestStudentName,
-            groupPerformanceData
+            groupPerformanceData,
+            studentQualitativeAverages: [] // Se mantiene aquí para evitar errores de tipo, aunque no se usa directamente en este componente.
         });
         console.log("DEBUG: Analysis results set.");
     };
@@ -872,6 +902,39 @@ const StudentPerformanceApp = () => {
                                     </table>
                                 </div>
                             </div>
+                            
+                            {/* Integrar el nuevo componente QuantitativeAnalysisSection */}
+                            {/* Se renderiza solo si hay datos de hoja, fechas de inicio y fin seleccionadas */}
+                            {sheetData.length > 0 && startDate && endDate && (
+                                <QuantitativeAnalysisSection
+                                    sheetData={sheetData}
+                                    allDates={allDates}
+                                    startDate={startDate}
+                                    endDate={endDate}
+                                />
+                            )}
+                            {/* Gráfico de Progreso Individual del Estudiante */}
+                            {/* Este componente se renderiza solo si hay datos de hoja, fechas de inicio y fin seleccionadas */}
+                            {/* y si hay al menos un estudiante con datos de calificaciones */}
+                            {sheetData.length > 0 && allDates.length > 0 && startDate && endDate && (
+                                <StudentProgressChart
+                                    sheetData={sheetData}
+                                    allDates={allDates}
+                                    startDate={startDate}
+                                    endDate={endDate}
+                                />
+                            )}
+                            {/* Componente de Actividades Pendientes por Estudiante */}
+                            {/* Este componente se renderiza solo si hay datos de hoja, fechas de inicio y fin seleccionadas */}
+                            {sheetData.length > 0 && allDates.length > 0 && startDate && endDate && (
+                                <StudentPendingActivities
+                                    sheetData={sheetData}
+                                    allDates={allDates}
+                                    startDate={startDate}
+                                    endDate={endDate}
+                                />
+                            )}
+
 
                             {/* Gráfico de Distribución Global de Calificaciones (Pie Chart) */}
                             <div className="mb-8">
