@@ -239,7 +239,7 @@ const StudentPerformanceApp = () => {
             default:
                 const numGrade = parseFloat(grade);
                 if (!isNaN(numGrade)) {
-                    return numGrade > 9 ? (numGrade / 100) * 9 : numGrade;
+                    return numGrade > 10 ? (numGrade / 100) * 10 : numGrade;
                 }
                 return null;
         }
@@ -815,7 +815,7 @@ const StudentPerformanceApp = () => {
                                                     onClick={() => toggleActivityExpansion(item.topic + '-low')}
                                                     className="font-medium text-red-700 w-full text-left flex justify-between items-center"
                                                 >
-                                                    <span>{item.topic}: Promedio {item.average}</span>
+                                                    <span>{item.topic}: Promedio general del grupo: {item.average}</span>
                                                     <span>{expandedActivities[item.topic + '-low'] ? '▲' : '▼'}</span>
                                                 </button>
                                                 {expandedActivities[item.topic + '-low'] && item.students.length > 0 && (
@@ -913,6 +913,7 @@ const StudentPerformanceApp = () => {
                                     endDate={endDate}
                                 />
                             )}
+                            <hr className="my-8" />
                             {/* Gráfico de Progreso Individual del Estudiante */}
                             {/* Este componente se renderiza solo si hay datos de hoja, fechas de inicio y fin seleccionadas */}
                             {/* y si hay al menos un estudiante con datos de calificaciones */}
@@ -924,6 +925,7 @@ const StudentPerformanceApp = () => {
                                     endDate={endDate}
                                 />
                             )}
+                            <hr className="my-8" />
                             {/* Componente de Actividades Pendientes por Estudiante */}
                             {/* Este componente se renderiza solo si hay datos de hoja, fechas de inicio y fin seleccionadas */}
                             {sheetData.length > 0 && allDates.length > 0 && startDate && endDate && (
@@ -934,7 +936,7 @@ const StudentPerformanceApp = () => {
                                     endDate={endDate}
                                 />
                             )}
-
+                            <hr className="my-8" />
 
                             {/* Gráfico de Distribución Global de Calificaciones (Pie Chart) */}
                             <div className="mb-8">
@@ -964,7 +966,7 @@ const StudentPerformanceApp = () => {
                                     <p className="text-center text-gray-600">No hay datos de calificaciones L/ML/NL para mostrar en el gráfico.</p>
                                 )}
                             </div>
-
+                            <hr className="my-8" />
                             {/* Gráfico de Rendimiento del Mejor Alumno */}
                             {analysisResults.bestStudentName && analysisResults.bestStudentPerformanceData.length > 0 && (
                                 <div className="mb-8">
@@ -981,7 +983,7 @@ const StudentPerformanceApp = () => {
                                     </ResponsiveContainer>
                                 </div>
                             )}
-
+                            <hr className="my-8" />
                             {/* Gráfico de Rendimiento General del Grupo */}
                             {analysisResults.groupPerformanceData.length > 0 && (
                                 <div className="mb-8">
@@ -998,6 +1000,7 @@ const StudentPerformanceApp = () => {
                                     </ResponsiveContainer>
                                 </div>
                             )}
+                            <hr className="my-8" />
                         </div>
                     )}
                 </>

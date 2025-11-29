@@ -51,7 +51,7 @@ const QuantitativeAnalysisSection: React.FC<QuantitativeAnalysisSectionProps> = 
       default:
         const numGrade = parseFloat(grade);
         if (!isNaN(numGrade)) {
-          return numGrade > 9 ? (numGrade / 100) * 9 : numGrade;
+          return numGrade > 10 ? (numGrade / 100) * 10 : numGrade;
         }
         return null;
     }
