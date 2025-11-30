@@ -867,7 +867,18 @@ const StudentPerformanceApp = () => {
                                     )}
                                 </ul>
                             </div>
-
+                            <hr className="my-8" />  
+                            {/* Componente de Actividades Pendientes por Estudiante */}
+                            {/* Este componente se renderiza solo si hay datos de hoja, fechas de inicio y fin seleccionadas */}
+                            {sheetData.length > 0 && allDates.length > 0 && startDate && endDate && (
+                                <StudentPendingActivities
+                                    sheetData={sheetData}
+                                    allDates={allDates}
+                                    startDate={startDate}
+                                    endDate={endDate}
+                                />
+                            )}
+                            <hr className="my-8" />            
                             {/* Proyección de estudiantes en riesgo de perder la asignatura */}
                             <div className="mb-8">
                                 <h3 className="text-2xl font-semibold text-gray-800 mb-4">Estudiantes con Probabilidad de Reprobar (Proyección)</h3>
@@ -919,17 +930,6 @@ const StudentPerformanceApp = () => {
                             {/* y si hay al menos un estudiante con datos de calificaciones */}
                             {sheetData.length > 0 && allDates.length > 0 && startDate && endDate && (
                                 <StudentProgressChart
-                                    sheetData={sheetData}
-                                    allDates={allDates}
-                                    startDate={startDate}
-                                    endDate={endDate}
-                                />
-                            )}
-                            <hr className="my-8" />
-                            {/* Componente de Actividades Pendientes por Estudiante */}
-                            {/* Este componente se renderiza solo si hay datos de hoja, fechas de inicio y fin seleccionadas */}
-                            {sheetData.length > 0 && allDates.length > 0 && startDate && endDate && (
-                                <StudentPendingActivities
                                     sheetData={sheetData}
                                     allDates={allDates}
                                     startDate={startDate}
