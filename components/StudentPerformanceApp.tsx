@@ -391,6 +391,12 @@ const StudentPerformanceApp = () => {
                     if (numericGrade !== null) {
                         // Si es una calificación válida (numérica o cualitativa convertida)
                         totalGradesForProjection += numericGrade;
+                        
+                        // Contar NL como tarea pendiente
+                        if (originalGrade === 'NL') {
+                            missingActivitiesCount++;
+                        }
+                        
                         if (isQualitativeGrade(originalGrade)) {
                             if (originalGrade === 'L') {
                                 gradeCategoryCounts[0].value++;
@@ -468,8 +474,19 @@ const StudentPerformanceApp = () => {
                     name: student.studentName,
                     projectedAverage: currentAverageIncludingPending.toFixed(2),
                     missing: missingActivitiesCount,
-                    details: relevantDatesInSelectedRange.filter(date => student.grades[date] && convertGradeToNumeric(student.grades[date].grade) === null)
-                                        .map(date => `${student.grades[date].topic} (${date})`)
+                    details: relevantDatesInSelectedRange.filter(date => {
+                        const activity = student.grades[date];
+                        if (!activity) return false;
+                        const numericGrade = convertGradeToNumeric(activity.grade);
+                        const originalGrade = String(activity.grade).trim().toUpperCase();
+                        // Incluir si es null/vacío O si es NL
+                        return numericGrade === null || originalGrade === 'NL';
+                    }).map(date => {
+                        const activity = student.grades[date];
+                        const originalGrade = String(activity.grade).trim().toUpperCase();
+                        const status = originalGrade === 'NL' ? 'NL' : 'Sin calificación';
+                        return `${activity.topic} (${date}) - ${status}`;
+                    })
                 });
             }
         });
@@ -746,7 +763,8 @@ const StudentPerformanceApp = () => {
 
                             {/* Promedio de un rango de columnas */}
                             <div className="mb-8">
-                                <h3 className="text-2xl font-semibold text-gray-800 mb-4">Promedio Total de Calificaciones por Estudiante (Rango Seleccionado)</h3>
+                                <h3 className="text-2xl font-semibold text-gray-800 mb-1">Promedio Total de Calificaciones por Estudiante (Rango Seleccionado)</h3>
+                                <small className="text-gray-500 italic mb-4 block">Esta tabla refleja el promedio total de las actividades, las tareas pendientes son las actividades que no tienen una calificación numérica válida o la celda del libro está vacía, o no fue logrado el objetivo que se planteo.</small>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full bg-white rounded-lg shadow-md">
                                         <thead className="bg-blue-50">

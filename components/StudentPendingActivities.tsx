@@ -97,7 +97,11 @@ const StudentPendingActivities: React.FC<StudentPendingActivitiesProps> = ({
 
         // Si la calificación no es numérica válida y no es una calificación cualitativa (L, ML, NL),
         // entonces se considera pendiente (incluye celdas vacías o con texto no reconocido)
-        if (numericGrade === null && !isQualitativeGrade(originalGrade)) {
+        if (
+          originalGrade === '' || 
+          originalGrade.toUpperCase() === 'NL' ||
+          (numericGrade === null && !isQualitativeGrade(originalGrade))
+        ) {
           currentPendingActivities.push({
             date: date,
             topic: activity.topic,
@@ -111,7 +115,8 @@ const StudentPendingActivities: React.FC<StudentPendingActivitiesProps> = ({
 
   return (
     <div className="mb-8">
-      <h3 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Actividades Pendientes por Estudiante</h3>
+      <h3 className="text-2xl font-semibold text-gray-800 mb-1 text-center">Actividades Pendientes por Estudiante</h3>
+      <span className="text-sm text-center text-gray-500 italic mb-4">Las actividades pendientes son aquellas que no tienen una calificación numérica válida, están vacías en el libro, o no fueron logradas.</span>
 
       {sheetData.length > 0 ? (
         <div className="mb-4">
