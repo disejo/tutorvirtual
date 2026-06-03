@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "15.4.3",
+    "next": "^16.2.7",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "recharts": "^3.1.0",
@@ -20,8 +20,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/xlsx": "^0.0.35",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@types/xlsx": "^0.0.36",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3"
   }
 }

@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Dependabot no soporta directamente pnpm,
+    # pero funciona leyendo package.json y pnpm-lock.yaml
+    # para abrir PRs con actualizaciones seguras.
+    allow:
+      - dependency-type: "direct"
+    ignore:
+      - dependency-type: "development"

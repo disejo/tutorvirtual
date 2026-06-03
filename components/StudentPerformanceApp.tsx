@@ -4,6 +4,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, L
 import QuantitativeAnalysisSection from './QuantitativeAnalysisSection';
 import StudentProgressChart from './StudentProgressChart'; 
 import StudentPendingActivities from './StudentPendingActivities';
+import StudentsAveragesSection from './StudentsAveragesSection';
 
 // Declaración global para window.XLSX
 // Esto es necesario porque la librería XLSX se carga dinámicamente en el navegador.
@@ -745,7 +746,7 @@ const StudentPerformanceApp = () => {
 
                             {/* Promedio de un rango de columnas */}
                             <div className="mb-8">
-                                <h3 className="text-2xl font-semibold text-gray-800 mb-4">Promedio de Calificaciones por Estudiante (Rango Seleccionado)</h3>
+                                <h3 className="text-2xl font-semibold text-gray-800 mb-4">Promedio Total de Calificaciones por Estudiante (Rango Seleccionado)</h3>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full bg-white rounded-lg shadow-md">
                                         <thead className="bg-blue-50">
@@ -802,6 +803,18 @@ const StudentPerformanceApp = () => {
                                     </div>
                                 </div>
                             )}
+                            
+                            <hr className="my-8" /> 
+                            {/* Sección de promedios por estudiante cualitativo y cuantitativo para el rango seleccionado */}
+                            {sheetData.length > 0 && startDate && endDate && (
+                                <StudentsAveragesSection
+                                    sheetData={sheetData}
+                                    allDates={allDates}
+                                    startDate={startDate}
+                                    endDate={endDate}
+                                />
+                            )}
+
                             <hr className="my-8" /> 
                             {/* Componente de Actividades Pendientes por Estudiante */}
                             {/* Este componente se renderiza solo si hay datos de hoja, fechas de inicio y fin seleccionadas */}
